@@ -8,7 +8,7 @@ const pool = new Pool({
   ssl:
     process.env.NODE_ENV === 'production'
       ? { rejectUnauthorized: false } // Render u otro hosting seguro
-      : false // Localhost u otros entornos sin SSL
+      : false 
 });
 
 // Función genérica para consultas
