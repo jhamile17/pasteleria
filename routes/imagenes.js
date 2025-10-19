@@ -5,6 +5,11 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
+// Helper para detectar si la petición espera JSON
+function isJson(req) {
+  return req.is('application/json') || req.headers.accept?.includes('application/json');
+}
+
 // 📦 Configuración de Multer
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -26,17 +31,22 @@ async function obtenerCategorias() {
 
 // 🔁 Redirigir /imagenes → /imagenes/nuevoi
 router.get('/', (req, res) => {
-  res.redirect('/nuevoi');
+  res.redirect('/imagenes/nuevoi');
 });
 
 // 🧾 Renderizar formulario de imágenes
 router.get('/nuevoi', async (req, res) => {
   try {
     const categorias = await obtenerCategorias();
-    res.render('imagenes/nuevoi', { categorias, mensaje: null, error: null });
+    res.render('imagenes/nuevoi', { 
+      categorias, 
+      mensaje: req.query.mensaje || null, 
+      error: req.query.error || null 
+    });
   } catch (err) {
     console.error(err);
-    res.status(500).send('Error al cargar formulario de imágenes');
+    if (isJson(req)) return res.status(500).json({ error: 'Error al cargar formulario de imágenes' });
+    res.redirect('/imagenes?error=Error al cargar formulario de imágenes');
   }
 });
 
@@ -48,13 +58,18 @@ router.get('/productos/byCategoria/:categoriaId', async (req, res) => {
       'SELECT id, nombre FROM productos WHERE categoria_id = $1',
       [categoriaId]
     );
+
     if (productos.length === 0) {
-      return res.status(404).json({ error: 'No hay productos para esta categoría' });
+      if (isJson(req)) return res.status(404).json({ error: 'No hay productos para esta categoría' });
+      return res.redirect(`/imagenes/nuevoi?error=${encodeURIComponent('No hay productos para esta categoría')}`);
     }
-    res.json(productos);
+
+    if (isJson(req)) return res.json(productos);
+    res.render('imagenes/productos', { productos, mensaje: null, error: null });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Error interno del servidor' });
+    if (isJson(req)) return res.status(500).json({ error: 'Error interno del servidor' });
+    res.redirect('/imagenes?error=Error interno del servidor');
   }
 });
 
@@ -62,19 +77,23 @@ router.get('/productos/byCategoria/:categoriaId', async (req, res) => {
 router.post('/', upload.single('imagen'), async (req, res) => {
   try {
     const { producto_id } = req.body;
-    const categorias = await obtenerCategorias();
 
     if (!req.file) {
-      return res.status(400).json({ error: 'Debe subir una imagen válida' });
+      const errorMsg = 'Debe subir una imagen válida';
+      if (isJson(req)) return res.status(400).json({ error: errorMsg });
+      return res.redirect(`/imagenes/nuevoi?error=${encodeURIComponent(errorMsg)}`);
     }
 
     const url = '/imagenes/productos/' + req.file.filename;
     await db.query('INSERT INTO imagenes_productos (url, producto_id) VALUES ($1, $2)', [url, producto_id]);
 
-    res.status(201).json({ mensaje: 'Imagen agregada correctamente', url });
+    const mensaje = 'Imagen agregada correctamente';
+    if (isJson(req)) return res.status(201).json({ mensaje, url });
+    res.redirect(`/imagenes/nuevoi?mensaje=${encodeURIComponent(mensaje)}`);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Error interno del servidor' });
+    if (isJson(req)) return res.status(500).json({ error: 'Error interno del servidor' });
+    res.redirect('/imagenes/nuevoi?error=Error al agregar imagen');
   }
 });
 
@@ -88,13 +107,17 @@ router.get('/list/:producto_id', async (req, res) => {
     );
 
     if (imagenes.length === 0) {
-      return res.status(404).json({ error: 'No hay imágenes para este producto' });
+      const errorMsg = 'No hay imágenes para este producto';
+      if (isJson(req)) return res.status(404).json({ error: errorMsg });
+      return res.redirect(`/imagenes/nuevoi?error=${encodeURIComponent(errorMsg)}`);
     }
 
-    res.json(imagenes);
+    if (isJson(req)) return res.json(imagenes);
+    res.render('imagenes/list', { imagenes, mensaje: null, error: null });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Error interno del servidor' });
+    if (isJson(req)) return res.status(500).json({ error: 'Error interno del servidor' });
+    res.redirect('/imagenes/nuevoi?error=Error al listar imágenes');
   }
 });
 
@@ -104,11 +127,17 @@ router.put('/:id', upload.single('imagen'), async (req, res) => {
     const { id } = req.params;
 
     if (!req.file) {
-      return res.status(400).json({ error: 'Debe subir una nueva imagen' });
+      const errorMsg = 'Debe subir una nueva imagen';
+      if (isJson(req)) return res.status(400).json({ error: errorMsg });
+      return res.redirect(`/imagenes/nuevoi?error=${encodeURIComponent(errorMsg)}`);
     }
 
     const { rows } = await db.query('SELECT url FROM imagenes_productos WHERE id = $1', [id]);
-    if (rows.length === 0) return res.status(404).json({ error: 'Imagen no encontrada' });
+    if (rows.length === 0) {
+      const errorMsg = 'Imagen no encontrada';
+      if (isJson(req)) return res.status(404).json({ error: errorMsg });
+      return res.redirect(`/imagenes/nuevoi?error=${encodeURIComponent(errorMsg)}`);
+    }
 
     const rutaAnterior = 'public' + rows[0].url;
     if (fs.existsSync(rutaAnterior)) fs.unlinkSync(rutaAnterior);
@@ -116,10 +145,13 @@ router.put('/:id', upload.single('imagen'), async (req, res) => {
     const url = '/imagenes/productos/' + req.file.filename;
     await db.query('UPDATE imagenes_productos SET url = $1 WHERE id = $2', [url, id]);
 
-    res.status(200).json({ mensaje: 'Imagen actualizada correctamente', url });
+    const mensaje = 'Imagen actualizada correctamente';
+    if (isJson(req)) return res.status(200).json({ mensaje, url });
+    res.redirect(`/imagenes/nuevoi?mensaje=${encodeURIComponent(mensaje)}`);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Error interno del servidor' });
+    if (isJson(req)) return res.status(500).json({ error: 'Error interno del servidor' });
+    res.redirect('/imagenes/nuevoi?error=Error al actualizar imagen');
   }
 });
 
@@ -129,17 +161,24 @@ router.delete('/:id', async (req, res) => {
     const { id } = req.params;
     const { rows } = await db.query('SELECT url FROM imagenes_productos WHERE id = $1', [id]);
 
-    if (rows.length === 0) return res.status(404).json({ error: 'Imagen no encontrada' });
+    if (rows.length === 0) {
+      const errorMsg = 'Imagen no encontrada';
+      if (isJson(req)) return res.status(404).json({ error: errorMsg });
+      return res.redirect(`/imagenes/nuevoi?error=${encodeURIComponent(errorMsg)}`);
+    }
 
     const rutaArchivo = 'public' + rows[0].url;
     if (fs.existsSync(rutaArchivo)) fs.unlinkSync(rutaArchivo);
 
     await db.query('DELETE FROM imagenes_productos WHERE id = $1', [id]);
 
-    res.status(200).json({ mensaje: 'Imagen eliminada correctamente' });
+    const mensaje = 'Imagen eliminada correctamente';
+    if (isJson(req)) return res.status(200).json({ mensaje });
+    res.redirect(`/imagenes/nuevoi?mensaje=${encodeURIComponent(mensaje)}`);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Error interno del servidor' });
+    if (isJson(req)) return res.status(500).json({ error: 'Error interno del servidor' });
+    res.redirect('/imagenes/nuevoi?error=Error al eliminar imagen');
   }
 });
 
