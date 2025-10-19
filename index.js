@@ -1,23 +1,27 @@
-require('dotenv').config(); // Cargar variables del archivo .env
-
+require('dotenv').config();
 const express = require('express');
 const path = require('path');
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpec = require('./swagger');
-const bodyParser = require('body-parser');
 const methodOverride = require('method-override');
 const session = require('express-session');
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
 const expressLayouts = require('express-ejs-layouts');
+const morgan = require('morgan'); // Logging
 const isAuthenticated = require('./middleware/auth');
-const { query } = require('./db'); // conexión global a PostgreSQL
+const { query } = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 10000;
-const SECRET_KEY = process.env.JWT_SECRET || "mi_secreto_ultra_seguro";
+const SECRET_KEY = process.env.JWT_SECRET;
 
-// 🧩 Configuración de EJS + layouts
+if (!SECRET_KEY) {
+  console.error("❌ JWT_SECRET no definido en .env");
+  process.exit(1);
+}
+
+// 🧩 Configuración EJS + layouts
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 app.use(expressLayouts);
@@ -27,6 +31,18 @@ app.set('layout', 'layout');
 app.use(express.static('public'));
 app.use('/vendor/bootstrap', express.static(path.join(__dirname, 'node_modules/bootstrap/dist')));
 app.use('/vendor/bootstrap-icons', express.static(path.join(__dirname, 'node_modules/bootstrap-icons')));
+
+// 🟦 Middleware base
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(methodOverride('_method'));
+app.use(cookieParser());
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'session_secret_default',
+  resave: false,
+  saveUninitialized: true
+}));
+app.use(morgan('dev'));
 
 // 🔹 CORS seguro
 const allowedOrigins = [
@@ -38,62 +54,15 @@ app.use((req, res, next) => {
   const origin = req.headers.origin;
   if (allowedOrigins.includes(origin)) {
     res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type,Authorization');
   }
-  res.header('Access-Control-Allow-Credentials', 'true');
-  res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type,Authorization');
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
 
-// 🔹 Middleware seguro para bloquear IPs no permitidas
-const allowedIps = process.env.ALLOWED_IPS ? process.env.ALLOWED_IPS.split(',') : [];
-
-app.use((req, res, next) => {
-  try {
-    let clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || '';
-    if (clientIp.startsWith("::ffff:")) clientIp = clientIp.replace("::ffff:", "");
-
-    if (!allowedIps.includes(clientIp)) {
-      console.log(`❌ Acceso no permitido desde IP: ${clientIp}`);
-
-      if (req.headers.accept?.includes('application/json')) {
-        return res.status(403).json({
-          status: "error",
-          message: `Acceso denegado: Tu IP (${clientIp}) no tiene permiso para entrar.`
-        });
-      }
-
-      return res.status(403).render('error', {
-        title: "Acceso Denegado",
-        mensaje: `Acceso denegado: Tu IP (${clientIp}) no tiene permiso para entrar.`,
-        error: null
-      });
-    }
-
-    next(); // IP permitida
-  } catch (err) {
-    console.error("Error al verificar IP:", err);
-    return res.status(403).render('error', {
-      title: "Acceso Denegado",
-      mensaje: "No se pudo verificar tu IP. Acceso denegado.",
-      error: null
-    });
-  }
-});
-
-// ⚙️ Middlewares base
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
-app.use(methodOverride('_method'));
-app.use(cookieParser());
-app.use(session({
-  secret: '171614',
-  resave: false,
-  saveUninitialized: true
-}));
-
-// 🔐 Middleware global para autenticación
+// 🔹 Middleware global de autenticación (JWT + locals)
 app.use((req, res, next) => {
   const token = req.cookies.token;
 
@@ -115,6 +84,24 @@ app.use((req, res, next) => {
   res.locals.title = "Cake Sweet";
   res.locals.error = null;
   res.locals.mensaje = null;
+  next();
+});
+
+// 🔹 Middleware IP whitelist (opcional)
+const allowedIps = process.env.ALLOWED_IPS?.split(',') || [];
+app.use((req, res, next) => {
+  if (allowedIps.length === 0) return next();
+
+  let clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || '';
+  if (clientIp.startsWith("::ffff:")) clientIp = clientIp.replace("::ffff:", "");
+
+  if (!allowedIps.includes(clientIp)) {
+    console.log(`❌ Acceso no permitido desde IP: ${clientIp}`);
+    const isJson = req.headers.accept?.includes('application/json');
+    return isJson
+      ? res.status(403).json({ status: "error", message: `Acceso denegado: IP ${clientIp}` })
+      : res.status(403).render('error', { title: "Acceso Denegado", mensaje: `IP ${clientIp} no permitida`, error: null });
+  }
 
   next();
 });
@@ -125,17 +112,13 @@ app.get('/api/test-db', async (req, res) => {
     const result = await query('SELECT NOW()');
     res.json({ status: '✅ Conexión exitosa a PostgreSQL', time: result.rows[0].now });
   } catch (err) {
-    console.error('Error al conectar a la base de datos:', err);
+    console.error('Error DB:', err);
     res.status(500).json({ error: '❌ Error en la conexión a la base de datos', detalle: err.message });
   }
 });
 
 app.get('/api/test-cors', (req, res) => {
-  res.json({
-    status: "OK",
-    origin: req.headers.origin,
-    message: "CORS funcionando correctamente 🚀"
-  });
+  res.json({ status: "OK", origin: req.headers.origin, message: "CORS funcionando correctamente 🚀" });
 });
 
 // 🚀 Importar rutas
@@ -148,10 +131,7 @@ const categoriasRoutes = require('./routes/categorias');
 const imagenesRoutes = require('./routes/imagenes');
 
 // 🏠 Ruta raíz
-app.get('/', (req, res) => {
-  if (res.locals.isAuthenticated) return res.redirect('/home');
-  return res.redirect('/catalogo');
-});
+app.get('/', (req, res) => res.locals.isAuthenticated ? res.redirect('/home') : res.redirect('/catalogo'));
 
 // 🌍 Rutas públicas
 app.use('/catalogo', catalogoRoutes);
@@ -164,41 +144,24 @@ app.use('/productos', isAuthenticated, productosRoutes);
 app.use('/categorias', isAuthenticated, categoriasRoutes);
 app.use('/imagenes', isAuthenticated, imagenesRoutes);
 
-// 📘 Swagger Docs
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
-  explorer: true,
-  swaggerOptions: { persistAuthorization: true }
-}));
+// 📘 Swagger
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, { explorer: true, swaggerOptions: { persistAuthorization: true }}));
 
 // ❌ Error 404
 app.use((req, res) => {
-  if (req.headers.accept?.includes('application/json')) {
-    return res.status(404).json({ mensaje: 'Ruta no encontrada' });
-  }
-
-  res.status(404).render('error', {
-    title: "Error 404",
-    mensaje: 'Página no encontrada',
-    error: null
-  });
+  const isJson = req.headers.accept?.includes('application/json');
+  return isJson
+    ? res.status(404).json({ mensaje: 'Ruta no encontrada' })
+    : res.status(404).render('error', { title: "Error 404", mensaje: 'Página no encontrada', error: null });
 });
 
 // 🔥 Error 500
 app.use((err, req, res, next) => {
   console.error('Error no controlado:', err);
-
-  if (req.headers.accept?.includes('application/json')) {
-    return res.status(500).json({
-      mensaje: 'Error interno del servidor. Intente nuevamente más tarde.',
-      error: err.message
-    });
-  }
-
-  res.status(500).render('error', {
-    title: "Error del servidor",
-    mensaje: 'Ocurrió un error interno. Intente nuevamente.',
-    error: err.message
-  });
+  const isJson = req.headers.accept?.includes('application/json');
+  return isJson
+    ? res.status(500).json({ mensaje: 'Error interno del servidor', error: err.message })
+    : res.status(500).render('error', { title: "Error del servidor", mensaje: 'Ocurrió un error interno.', error: err.message });
 });
 
 // 🚀 Iniciar servidor
