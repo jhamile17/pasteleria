@@ -1,8 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../db');
+const db = require('../db'); // Pool de PostgreSQL
 
-// Detecta si la petición es JSON
+// Helper para detectar si viene de Postman (JSON)
 const isJson = (req) => req.is('application/json') || req.headers.accept?.includes('application/json');
 
 // ✅ GET - Listar categorías
@@ -10,56 +10,37 @@ router.get('/', async (req, res) => {
   try {
     const { rows: categorias } = await db.query('SELECT * FROM categorias ORDER BY id ASC');
 
-    if (isJson(req)) return res.status(200).json({ mensaje: 'Categorías obtenidas correctamente', categorias });
+    if (isJson(req)) {
+      return res.status(200).json({ mensaje: 'Categorías obtenidas correctamente', categorias });
+    }
 
-    res.render('categorias/index', { categorias, mensaje: req.flash('mensaje'), error: req.flash('error') });
+    res.render('categorias/index', { categorias, mensaje: null, error: null });
   } catch (err) {
-    console.error(err);
+    console.error('❌ Error al obtener categorías:', err);
     if (isJson(req)) return res.status(500).json({ error: 'Error interno del servidor' });
-    req.flash('error', 'Error cargando categorías');
-    res.redirect('/');
+    res.redirect('/categorias?error=Error cargando categorías');
   }
-});
-
-// ✅ GET - Formulario nueva categoría
-router.get('/nuevo', (req, res) => {
-  res.render('categorias/nuevo', { categoria: {}, error: req.flash('error') });
 });
 
 // ✅ POST - Crear categoría
 router.post('/', async (req, res) => {
   const { nombre } = req.body;
   try {
-    if (!nombre || nombre.trim() === '') throw new Error('El nombre de la categoría es obligatorio');
+    if (!nombre || nombre.trim() === '') {
+      const msg = 'El nombre de la categoría es obligatorio';
+      if (isJson(req)) return res.status(400).json({ error: msg });
+      return res.redirect(`/categorias?error=${encodeURIComponent(msg)}`);
+    }
 
     await db.query('INSERT INTO categorias (nombre) VALUES ($1)', [nombre.trim()]);
 
-    if (isJson(req)) return res.status(201).json({ mensaje: 'Categoría creada correctamente' });
-
-    req.flash('mensaje', 'Categoría creada correctamente');
-    res.redirect('/categorias');
+    const msg = 'Categoría creada correctamente';
+    if (isJson(req)) return res.status(201).json({ mensaje: msg });
+    res.redirect(`/categorias?mensaje=${encodeURIComponent(msg)}`);
   } catch (err) {
-    console.error(err);
-    if (isJson(req)) return res.status(400).json({ error: err.message });
-    req.flash('error', err.message);
-    res.redirect('/categorias/nuevo');
-  }
-});
-
-// ✅ GET - Formulario editar categoría
-router.get('/editar/:id', async (req, res) => {
-  const { id } = req.params;
-  try {
-    const { rows } = await db.query('SELECT * FROM categorias WHERE id = $1', [id]);
-    if (rows.length === 0) {
-      req.flash('error', 'Categoría no encontrada');
-      return res.redirect('/categorias');
-    }
-    res.render('categorias/editar', { categoria: rows[0], error: req.flash('error') });
-  } catch (err) {
-    console.error(err);
-    req.flash('error', 'Error cargando categoría');
-    res.redirect('/categorias');
+    console.error('❌ Error al crear categoría:', err);
+    if (isJson(req)) return res.status(500).json({ error: 'Error interno del servidor' });
+    res.redirect('/categorias?error=Error al guardar categoría');
   }
 });
 
@@ -69,41 +50,54 @@ router.put('/:id', async (req, res) => {
   const { nombre } = req.body;
 
   try {
-    if (!nombre || nombre.trim() === '') throw new Error('El nombre de la categoría es obligatorio');
+    if (!nombre || nombre.trim() === '') {
+      const msg = 'El nombre de la categoría es obligatorio';
+      if (isJson(req)) return res.status(400).json({ error: msg });
+      return res.redirect(`/categorias?error=${encodeURIComponent(msg)}`);
+    }
 
-    const { rowCount } = await db.query('UPDATE categorias SET nombre = $1 WHERE id = $2', [nombre.trim(), id]);
+    const { rowCount } = await db.query(
+      'UPDATE categorias SET nombre = $1 WHERE id = $2',
+      [nombre.trim(), id]
+    );
 
-    if (rowCount === 0) throw new Error('Categoría no encontrada');
+    if (rowCount === 0) {
+      const msg = 'Categoría no encontrada';
+      if (isJson(req)) return res.status(404).json({ error: msg });
+      return res.redirect(`/categorias?error=${encodeURIComponent(msg)}`);
+    }
 
-    if (isJson(req)) return res.status(200).json({ mensaje: 'Categoría actualizada correctamente' });
-
-    req.flash('mensaje', 'Categoría actualizada correctamente');
-    res.redirect('/categorias');
+    const msg = 'Categoría actualizada correctamente';
+    if (isJson(req)) return res.status(200).json({ mensaje: msg });
+    res.redirect(`/categorias?mensaje=${encodeURIComponent(msg)}`);
   } catch (err) {
-    console.error(err);
-    if (isJson(req)) return res.status(400).json({ error: err.message });
-    req.flash('error', err.message);
-    res.redirect(`/categorias/editar/${id}`);
+    console.error('❌ Error al actualizar categoría:', err);
+    if (isJson(req)) return res.status(500).json({ error: 'Error interno del servidor' });
+    res.redirect('/categorias?error=Error al actualizar categoría');
   }
 });
 
 // ✅ DELETE - Eliminar categoría
 router.delete('/:id', async (req, res) => {
   const { id } = req.params;
+
   try {
     const { rowCount } = await db.query('DELETE FROM categorias WHERE id = $1', [id]);
-    if (rowCount === 0) throw new Error('Categoría no encontrada');
 
-    if (isJson(req)) return res.status(200).json({ mensaje: 'Categoría eliminada correctamente' });
+    if (rowCount === 0) {
+      const msg = 'Categoría no encontrada';
+      if (isJson(req)) return res.status(404).json({ error: msg });
+      return res.redirect(`/categorias?error=${encodeURIComponent(msg)}`);
+    }
 
-    req.flash('mensaje', 'Categoría eliminada correctamente');
-    res.redirect('/categorias');
+    const msg = 'Categoría eliminada correctamente';
+    if (isJson(req)) return res.status(200).json({ mensaje: msg });
+    res.redirect(`/categorias?mensaje=${encodeURIComponent(msg)}`);
   } catch (err) {
-    console.error(err);
-    if (isJson(req)) return res.status(400).json({ error: err.message });
-    req.flash('error', err.message);
-    res.redirect('/categorias');
+    console.error('❌ Error al eliminar categoría:', err);
+    if (isJson(req)) return res.status(500).json({ error: 'Error interno del servidor' });
+    res.redirect('/categorias?error=Error al eliminar categoría');
   }
 });
 
-module.exports = router;
+module.exports = router; para render y postgress 
