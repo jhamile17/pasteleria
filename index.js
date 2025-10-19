@@ -51,9 +51,10 @@ const allowedIps = process.env.ALLOWED_IPS ? process.env.ALLOWED_IPS.split(',') 
 app.use((req, res, next) => {
   const clientIp = req.headers['x-forwarded-for']?.split(',')[0] || req.socket.remoteAddress;
   if (!allowedIps.includes(clientIp)) {
+    console.log(`❌ Acceso no permitido desde esta IP: ${clientIp}`);
     return res.status(403).render('error', {
-      title: "Acceso Denegado",
-      mensaje: `Tu IP (${clientIp}) no tiene permiso para acceder.`,
+      title: "Acceso Restringido",
+      mensaje: "❌ Lo sentimos, no puedes acceder a esta página desde tu red o VPN.",
       error: null
     });
   }
