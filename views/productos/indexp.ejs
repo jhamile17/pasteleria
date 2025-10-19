@@ -1,4 +1,4 @@
-<!-- views/productos/index.ejs -->
+<!-- views/productos/indexp.ejs -->
 <div class="container mt-4">
   <div class="row mb-4">
     <div class="col">
@@ -6,14 +6,6 @@
       <a href="/productos/nuevop" class="btn btn-success mt-2">Agregar Nuevo Producto</a>
     </div>
   </div>
-
-  <!-- Mensajes de éxito o error -->
-  <% if (mensaje) { %>
-    <div class="alert alert-success"><%= mensaje %></div>
-  <% } %>
-  <% if (error) { %>
-    <div class="alert alert-danger"><%= error %></div>
-  <% } %>
 
   <!-- Filtro de categorías -->
   <div class="row mb-4">
@@ -44,6 +36,7 @@
               <th>Nombre</th>
               <th>Precio (S/)</th>
               <th>Categoría</th>
+              <th>Imagen</th>
               <th>Acciones</th>
             </tr>
           </thead>
@@ -55,9 +48,16 @@
                 <td><%= Number(producto.precio).toFixed(2) %></td>
                 <td><%= producto.categoria || 'Sin categoría' %></td>
                 <td>
+                  <% if (producto.imagen) { %>
+                    <img src="<%= producto.imagen %>" alt="<%= producto.nombre %>" style="width:50px; height:50px;">
+                  <% } else { %>
+                    -
+                  <% } %>
+                </td>
+                <td>
                   <% if (isAuthenticated) { %>
-                    <a href="/productos/editar/<%= producto.id %>" class="btn btn-sm btn-warning">Editar</a>
-                    <form action="/productos/<%= producto.id %>?_method=DELETE" method="POST" class="d-inline">
+                    <a href="/productos/<%= producto.id %>/edit" class="btn btn-sm btn-warning">Editar</a>
+                    <form action="/productos/<%= producto.id %>/delete" method="POST" class="d-inline">
                       <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('¿Eliminar producto?')">Eliminar</button>
                     </form>
                   <% } %>
