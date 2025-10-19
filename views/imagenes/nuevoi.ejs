@@ -5,7 +5,6 @@
   <% if (mensaje) { %>
     <div class="alert alert-success"><%= mensaje %></div>
   <% } %>
-
   <% if (error) { %>
     <div class="alert alert-danger"><%= error %></div>
   <% } %>
@@ -16,7 +15,7 @@
       <select class="form-select" id="categoria_id" required>
         <option value="">Seleccione una categoría</option>
         <% categorias.forEach(cat => { %>
-          <option value="<%= cat.id %>"><%= cat.nombre %></option>
+          <option value="<%= cat.id %>" <%= categoriaId==cat.id ? 'selected' : '' %>><%= cat.nombre %></option>
         <% }) %>
       </select>
     </div>
@@ -25,6 +24,9 @@
       <label for="producto_id" class="form-label">Producto</label>
       <select class="form-select" id="producto_id" name="producto_id" required>
         <option value="">Seleccione un producto</option>
+        <% productos.forEach(p => { %>
+          <option value="<%= p.id %>"><%= p.nombre %></option>
+        <% }) %>
       </select>
     </div>
 
@@ -45,7 +47,20 @@
         <th>Acciones</th>
       </tr>
     </thead>
-    <tbody></tbody>
+    <tbody>
+      <% if (productos.length && productos[0].imagenes) { %>
+        <% productos[0].imagenes.forEach(img => { %>
+          <tr>
+            <td><%= img.id %></td>
+            <td><img src="<%= img.url %>" style="height:50px;"></td>
+            <td>
+              <button class="btn btn-sm btn-warning me-2" onclick="editarImagen(<%= img.id %>)">Editar</button>
+              <button class="btn btn-sm btn-danger" onclick="eliminarImagen(<%= img.id %>, <%= productos[0].id %>)">Eliminar</button>
+            </td>
+          </tr>
+        <% }) %>
+      <% } %>
+    </tbody>
   </table>
 </div>
 
@@ -62,14 +77,22 @@ categoriaSelect.addEventListener('change', async () => {
   if (!categoriaId) return;
 
   try {
-    const res = await fetch(`/imagenes/productos/byCategoria/${categoriaId}`);
-    const productos = await res.json();
+    // 🔹 Usar query params para filtrar productos
+    const res = await fetch(`/imagenes/productos?categoria=${categoriaId}`);
+    const html = await res.text();
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    
+    // Aquí puedes actualizar tu select con productos usando JSON desde router
+    const productos = JSON.parse(doc.body.dataset.productos || '[]');
+
     productos.forEach(p => {
       const option = document.createElement('option');
       option.value = p.id;
       option.textContent = p.nombre;
       productoSelect.appendChild(option);
     });
+
     if (productos.length) {
       productoSelect.value = productos[0].id;
       productoSelect.dispatchEvent(new Event('change'));
