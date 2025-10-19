@@ -11,7 +11,10 @@
     <div class="alert alert-danger"><%= error %></div>
   <% } %>
 
-  <form action="/categorias/<%= categoria.id %>?_method=PUT" method="POST" class="mb-3">
+  <form action="/categorias/<%= categoria.id %>" method="POST" class="mb-3">
+    <!-- Si method-override está activo -->
+    <input type="hidden" name="_method" value="PUT">
+
     <div class="mb-3">
       <label for="nombre" class="form-label">Nombre de la Categoría</label>
       <input 
