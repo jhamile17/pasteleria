@@ -8,7 +8,6 @@ const session = require('express-session');
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
 const expressLayouts = require('express-ejs-layouts');
-const morgan = require('morgan'); // Logging
 const isAuthenticated = require('./middleware/auth');
 const { query } = require('./db');
 
@@ -42,7 +41,6 @@ app.use(session({
   resave: false,
   saveUninitialized: true
 }));
-app.use(morgan('dev'));
 
 // 🔹 CORS seguro
 const allowedOrigins = [
@@ -62,7 +60,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// 🔹 Middleware global de autenticación (JWT + locals)
+// 🔹 Middleware global de autenticación (JWT)
 app.use((req, res, next) => {
   const token = req.cookies.token;
 
@@ -87,20 +85,27 @@ app.use((req, res, next) => {
   next();
 });
 
-// 🔹 Middleware IP whitelist (opcional)
+// 🔹 Middleware IP whitelist amigable
 const allowedIps = process.env.ALLOWED_IPS?.split(',') || [];
 app.use((req, res, next) => {
-  if (allowedIps.length === 0) return next();
-
   let clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || '';
   if (clientIp.startsWith("::ffff:")) clientIp = clientIp.replace("::ffff:", "");
 
-  if (!allowedIps.includes(clientIp)) {
-    console.log(`❌ Acceso no permitido desde IP: ${clientIp}`);
-    const isJson = req.headers.accept?.includes('application/json');
-    return isJson
-      ? res.status(403).json({ status: "error", message: `Acceso denegado: IP ${clientIp}` })
-      : res.status(403).render('error', { title: "Acceso Denegado", mensaje: `IP ${clientIp} no permitida`, error: null });
+  if (allowedIps.length > 0 && !allowedIps.includes(clientIp)) {
+    console.log(`⚠️ Acceso denegado desde IP: ${clientIp}`);
+
+    if (req.headers.accept?.includes('application/json')) {
+      return res.status(403).json({
+        status: "error",
+        mensaje: "Acceso denegado: tu IP no tiene permiso."
+      });
+    }
+
+    return res.status(403).render('error', {
+      title: "Acceso Denegado",
+      mensaje: `Acceso denegado: tu IP (${clientIp}) no tiene permiso para entrar.`,
+      error: null
+    });
   }
 
   next();
@@ -160,8 +165,8 @@ app.use((err, req, res, next) => {
   console.error('Error no controlado:', err);
   const isJson = req.headers.accept?.includes('application/json');
   return isJson
-    ? res.status(500).json({ mensaje: 'Error interno del servidor', error: err.message })
-    : res.status(500).render('error', { title: "Error del servidor", mensaje: 'Ocurrió un error interno.', error: err.message });
+    ? res.status(500).json({ mensaje: 'Error interno del servidor', error: 'Ocurrió un error. Intente nuevamente.' })
+    : res.status(500).render('error', { title: "Error del servidor", mensaje: 'Ocurrió un error. Intente nuevamente.', error: null });
 });
 
 // 🚀 Iniciar servidor
