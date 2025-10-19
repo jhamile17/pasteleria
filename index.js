@@ -50,14 +50,24 @@ app.use((req, res, next) => {
 const allowedIps = process.env.ALLOWED_IPS ? process.env.ALLOWED_IPS.split(',') : [];
 app.use((req, res, next) => {
   const clientIp = req.headers['x-forwarded-for']?.split(',')[0] || req.socket.remoteAddress;
+
   if (!allowedIps.includes(clientIp)) {
-    console.log(`❌ Acceso no permitido desde esta IP: ${clientIp}`);
+    console.log(`❌ Acceso no permitido desde IP: ${clientIp}`);
+
+    if (req.headers.accept?.includes('application/json')) {
+      return res.status(403).json({
+        status: "error",
+        message: `Acceso denegado: Tu IP (${clientIp}) no tiene permiso para entrar.`
+      });
+    }
+
     return res.status(403).render('error', {
-      title: "Acceso Restringido",
-      mensaje: "❌ Lo sentimos, no puedes acceder a esta página desde tu red o VPN.",
+      title: "Acceso Denegado",
+      mensaje: `Acceso denegado: Tu IP (${clientIp}) no tiene permiso para entrar.`,
       error: null
     });
   }
+
   next();
 });
 
