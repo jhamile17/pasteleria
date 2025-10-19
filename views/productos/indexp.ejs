@@ -1,4 +1,4 @@
-<!-- views/productos/indexp.ejs -->
+<!-- views/productos/index.ejs -->
 <div class="container mt-4">
   <div class="row mb-4">
     <div class="col">
@@ -36,7 +36,6 @@
               <th>Nombre</th>
               <th>Precio (S/)</th>
               <th>Categoría</th>
-              <th>Imagen</th>
               <th>Acciones</th>
             </tr>
           </thead>
@@ -47,13 +46,6 @@
                 <td><%= producto.nombre %></td>
                 <td><%= Number(producto.precio).toFixed(2) %></td>
                 <td><%= producto.categoria || 'Sin categoría' %></td>
-                <td>
-                  <% if (producto.imagen) { %>
-                    <img src="<%= producto.imagen %>" alt="<%= producto.nombre %>" style="width:50px; height:50px;">
-                  <% } else { %>
-                    -
-                  <% } %>
-                </td>
                 <td>
                   <% if (isAuthenticated) { %>
                     <a href="/productos/<%= producto.id %>/edit" class="btn btn-sm btn-warning">Editar</a>
