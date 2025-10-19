@@ -2,6 +2,14 @@
 <div class="container py-4">
   <h2 class="mb-4 text-center">Registrar Nuevo Producto</h2>
 
+  <% if (mensaje) { %>
+    <div class="alert alert-success"><%= mensaje %></div>
+  <% } %>
+
+  <% if (error) { %>
+    <div class="alert alert-danger"><%= error %></div>
+  <% } %>
+
   <form action="/productos" method="POST" class="mb-5">
     <div class="mb-3">
       <label for="nombre" class="form-label">Nombre del Producto</label>
@@ -26,6 +34,4 @@
     <button type="submit" class="btn btn-primary">Guardar Producto</button>
     <a href="/productos" class="btn btn-secondary">Cancelar</a>
   </form>
-    </tbody>
-  </table>
 </div>
