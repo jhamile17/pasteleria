@@ -5,13 +5,15 @@ const db = require('../db'); // Importa la conexión a PostgreSQL
 // ✅ LISTAR PRODUCTOS
 router.get('/', async (req, res) => {
   try {
-    const productos = await db.query(`
+    const result = await db.query(`
       SELECT p.id, p.nombre, p.precio, c.nombre AS categoria,
              (SELECT i.url FROM imagenes_productos i WHERE i.producto_id = p.id LIMIT 1) AS imagen
       FROM productos p
       LEFT JOIN categorias c ON p.categoria_id = c.id
       ORDER BY p.id ASC
     `);
+
+    const productos = result.rows;
 
     // Respuesta según tipo de solicitud
     if (req.is('application/json') || req.headers.accept?.includes('application/json')) {
@@ -39,7 +41,7 @@ router.post('/', async (req, res) => {
     }
 
     const categoriaCheck = await db.query('SELECT id FROM categorias WHERE id = $1', [categoria_id]);
-    if (categoriaCheck.length === 0) {
+    if (categoriaCheck.rows.length === 0) {
       return res.status(400).json({ error: 'La categoría seleccionada no existe' });
     }
 
@@ -59,7 +61,7 @@ router.post('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const producto = await db.query(
+    const result = await db.query(
       `SELECT p.id, p.nombre, p.precio, c.nombre AS categoria
        FROM productos p
        LEFT JOIN categorias c ON p.categoria_id = c.id
@@ -67,11 +69,11 @@ router.get('/:id', async (req, res) => {
       [id]
     );
 
-    if (producto.length === 0) {
+    if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Producto no encontrado' });
     }
 
-    res.status(200).json({ mensaje: 'Detalle de producto obtenido', producto: producto[0] });
+    res.status(200).json({ mensaje: 'Detalle de producto obtenido', producto: result.rows[0] });
   } catch (err) {
     console.error('❌ Error al obtener producto:', err.message);
     res.status(500).json({ error: 'Error interno del servidor' });
@@ -85,7 +87,7 @@ router.put('/:id', async (req, res) => {
     const { nombre, precio, categoria_id } = req.body;
 
     const productoCheck = await db.query('SELECT * FROM productos WHERE id = $1', [id]);
-    if (productoCheck.length === 0) {
+    if (productoCheck.rows.length === 0) {
       return res.status(404).json({ error: 'Producto no encontrado' });
     }
 
@@ -107,7 +109,7 @@ router.delete('/:id', async (req, res) => {
     const { id } = req.params;
     const productoCheck = await db.query('SELECT * FROM productos WHERE id = $1', [id]);
 
-    if (productoCheck.length === 0) {
+    if (productoCheck.rows.length === 0) {
       return res.status(404).json({ error: 'Producto no encontrado' });
     }
 
