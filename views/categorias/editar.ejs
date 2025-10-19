@@ -1,3 +1,5 @@
+<!-- views/categorias/editar.ejs -->
+
 <script src="/js/proteger-admin.js"></script>
 
 <div class="container py-4">
@@ -11,10 +13,7 @@
     <div class="alert alert-danger"><%= error %></div>
   <% } %>
 
-  <form action="/categorias/<%= categoria.id %>" method="POST" class="mb-3">
-    <!-- Si method-override está activo -->
-    <input type="hidden" name="_method" value="PUT">
-
+  <form action="/categorias/<%= categoria.id %>?_method=PUT" method="POST" class="mb-3">
     <div class="mb-3">
       <label for="nombre" class="form-label">Nombre de la Categoría</label>
       <input 
@@ -22,8 +21,8 @@
         class="form-control" 
         name="nombre" 
         id="nombre" 
-        value="<%= categoria.nombre %>" 
         required
+        value="<%= typeof categoria !== 'undefined' && categoria.nombre ? categoria.nombre : '' %>" <!-- Mantener valor si hubo error -->
       >
     </div>
 
