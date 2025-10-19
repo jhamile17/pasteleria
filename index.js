@@ -46,21 +46,16 @@ app.use((req, res, next) => {
   next();
 });
 
-// 🔹 Restricción de IP automática (Render-friendly)
-const allowedIPs = [
-  '127.0.0.1',        // localhost IPv4
-  '::1',              // localhost IPv6
-  process.env.MI_IP    // Tu IP pública permitida (poner en .env)
-];
-
+// 🔹 Middleware para bloquear IPs no permitidas
+const allowedIps = process.env.ALLOWED_IPS ? process.env.ALLOWED_IPS.split(',') : [];
 app.use((req, res, next) => {
-  // Detectar IP real detrás de proxies de Render
-  let clientIP = req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.ip;
-  clientIP = clientIP.split(',')[0].trim().replace('::ffff:', '');
-
-  if (!allowedIPs.includes(clientIP)) {
-    console.log(`❌ Acceso denegado desde IP: ${clientIP}`);
-    return res.status(403).send('❌ Acceso no permitido desde esta IP');
+  const clientIp = req.headers['x-forwarded-for']?.split(',')[0] || req.socket.remoteAddress;
+  if (!allowedIps.includes(clientIp)) {
+    return res.status(403).render('error', {
+      title: "Acceso Denegado",
+      mensaje: `Tu IP (${clientIp}) no tiene permiso para acceder.`,
+      error: null
+    });
   }
   next();
 });
@@ -102,7 +97,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// 🔹 Ruta de prueba de conexión a la BD
+// 🔹 Rutas de prueba
 app.get('/api/test-db', async (req, res) => {
   try {
     const result = await query('SELECT NOW()');
@@ -113,7 +108,6 @@ app.get('/api/test-db', async (req, res) => {
   }
 });
 
-// 🔹 Ruta de prueba CORS
 app.get('/api/test-cors', (req, res) => {
   res.json({
     status: "OK",
