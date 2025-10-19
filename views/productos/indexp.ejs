@@ -7,6 +7,14 @@
     </div>
   </div>
 
+  <!-- Mensajes de éxito o error -->
+  <% if (mensaje) { %>
+    <div class="alert alert-success"><%= mensaje %></div>
+  <% } %>
+  <% if (error) { %>
+    <div class="alert alert-danger"><%= error %></div>
+  <% } %>
+
   <!-- Filtro de categorías -->
   <div class="row mb-4">
     <div class="col-md-6">
@@ -48,8 +56,8 @@
                 <td><%= producto.categoria || 'Sin categoría' %></td>
                 <td>
                   <% if (isAuthenticated) { %>
-                    <a href="/productos/<%= producto.id %>/edit" class="btn btn-sm btn-warning">Editar</a>
-                    <form action="/productos/<%= producto.id %>/delete" method="POST" class="d-inline">
+                    <a href="/productos/editar/<%= producto.id %>" class="btn btn-sm btn-warning">Editar</a>
+                    <form action="/productos/<%= producto.id %>?_method=DELETE" method="POST" class="d-inline">
                       <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('¿Eliminar producto?')">Eliminar</button>
                     </form>
                   <% } %>
