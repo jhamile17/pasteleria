@@ -7,6 +7,10 @@ function isJson(req) {
   return req.is('application/json') || req.headers.accept?.includes('application/json');
 }
 
+// ======================
+// RUTAS DE CATEGORÍAS
+// ======================
+
 // ✅ GET - Listar categorías
 router.get('/', async (req, res) => {
   try {
@@ -28,6 +32,11 @@ router.get('/', async (req, res) => {
   }
 });
 
+// ✅ GET - Formulario nueva categoría
+router.get('/nuevo', (req, res) => {
+  res.render('categorias/nuevo', { mensaje: null, error: null });
+});
+
 // ✅ POST - Crear categoría
 router.post('/', async (req, res) => {
   const { nombre } = req.body;
@@ -35,7 +44,7 @@ router.post('/', async (req, res) => {
   if (!nombre || nombre.trim() === '') {
     const errorMsg = 'El nombre de la categoría es obligatorio';
     if (isJson(req)) return res.status(400).json({ error: errorMsg });
-    return res.redirect(`/categorias?error=${encodeURIComponent(errorMsg)}`);
+    return res.redirect(`/categorias/nuevo?error=${encodeURIComponent(errorMsg)}`);
   }
 
   try {
@@ -48,7 +57,24 @@ router.post('/', async (req, res) => {
     console.error('❌ Error al crear categoría:', err);
     const errorMsg = 'Error al guardar categoría';
     if (isJson(req)) return res.status(500).json({ error: errorMsg });
-    res.redirect(`/categorias?error=${encodeURIComponent(errorMsg)}`);
+    res.redirect(`/categorias/nuevo?error=${encodeURIComponent(errorMsg)}`);
+  }
+});
+
+// ✅ GET - Formulario editar categoría
+router.get('/editar/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rows } = await db.query('SELECT * FROM categorias WHERE id = $1', [id]);
+
+    if (rows.length === 0) {
+      return res.redirect(`/categorias?error=${encodeURIComponent('Categoría no encontrada')}`);
+    }
+
+    res.render('categorias/editar', { categoria: rows[0], mensaje: null, error: null });
+  } catch (err) {
+    console.error('❌ Error al cargar formulario de edición:', err);
+    res.redirect(`/categorias?error=${encodeURIComponent('Error al cargar formulario')}`);
   }
 });
 
@@ -60,7 +86,7 @@ router.put('/:id', async (req, res) => {
   if (!nombre || nombre.trim() === '') {
     const errorMsg = 'El nombre de la categoría es obligatorio';
     if (isJson(req)) return res.status(400).json({ error: errorMsg });
-    return res.redirect(`/categorias?error=${encodeURIComponent(errorMsg)}`);
+    return res.redirect(`/categorias/editar/${id}?error=${encodeURIComponent(errorMsg)}`);
   }
 
   try {
@@ -82,7 +108,7 @@ router.put('/:id', async (req, res) => {
     console.error('❌ Error al actualizar categoría:', err);
     const errorMsg = 'Error al actualizar categoría';
     if (isJson(req)) return res.status(500).json({ error: errorMsg });
-    res.redirect(`/categorias?error=${encodeURIComponent(errorMsg)}`);
+    res.redirect(`/categorias/editar/${id}?error=${encodeURIComponent(errorMsg)}`);
   }
 });
 
