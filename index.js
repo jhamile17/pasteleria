@@ -46,21 +46,16 @@ app.use((req, res, next) => {
   next();
 });
 
-// 🔹 Restricción de IP automática (Render-friendly)
-const allowedIPs = [
-  '127.0.0.1',        // localhost IPv4
-  '::1',              // localhost IPv6
-  process.env.MI_IP    // Tu IP pública permitida (poner en .env)
-];
-
+// 🔹 Middleware para filtrar IPs
+const allowedIps = process.env.ALLOWED_IPS?.split(',') || []; // Ej: "127.0.0.1,38.252.153.75"
 app.use((req, res, next) => {
-  // Detectar IP real detrás de proxies de Render
-  let clientIP = req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.ip;
-  clientIP = clientIP.split(',')[0].trim().replace('::ffff:', '');
-
-  if (!allowedIPs.includes(clientIP)) {
-    console.log(`❌ Acceso denegado desde IP: ${clientIP}`);
-    return res.status(403).send('❌ Acceso no permitido desde esta IP');
+  const clientIp = req.ip.replace('::ffff:', ''); // IPv4 detrás de IPv6
+  if (!allowedIps.includes(clientIp)) {
+    return res.status(403).render('error', {
+      title: 'Acceso Denegado',
+      mensaje: 'Tu IP no está autorizada para acceder a esta página',
+      error: null
+    });
   }
   next();
 });
