@@ -1,3 +1,5 @@
+<!-- views/categorias/nuevo.ejs -->
+
 <div class="container py-4">
   <h2 class="mb-4 text-center">Registrar Nueva Categoría</h2>
 
@@ -26,7 +28,7 @@
         name="nombre" 
         required 
         placeholder="Ej: Bebidas"
-        value="<%= nombre ? nombre : '' %>" <!-- Mantener valor si hubo error -->
+        value="<%= typeof nombre !== 'undefined' ? nombre : '' %>" <!-- Mantener valor si hubo error -->
       >
     </div>
 
