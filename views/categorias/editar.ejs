@@ -3,6 +3,14 @@
 <div class="container py-4">
   <h2 class="mb-4 text-center">Editar Categoría</h2>
 
+  <!-- Mensajes -->
+  <% if (mensaje) { %>
+    <div class="alert alert-success"><%= mensaje %></div>
+  <% } %>
+  <% if (error) { %>
+    <div class="alert alert-danger"><%= error %></div>
+  <% } %>
+
   <form action="/categorias/<%= categoria.id %>?_method=PUT" method="POST" class="mb-3">
     <div class="mb-3">
       <label for="nombre" class="form-label">Nombre de la Categoría</label>
@@ -15,8 +23,8 @@
         required
       >
     </div>
+
     <button type="submit" class="btn btn-success">Actualizar</button>
-    <a href="/categorias/nuevo" class="btn btn-secondary">Cancelar</a>
+    <a href="/categorias" class="btn btn-secondary">Cancelar</a>
   </form>
 </div>
-
