@@ -46,29 +46,40 @@ app.use((req, res, next) => {
   next();
 });
 
-// 🔹 Middleware para bloquear IPs no permitidas
+// 🔹 Middleware seguro para bloquear IPs no permitidas
 const allowedIps = process.env.ALLOWED_IPS ? process.env.ALLOWED_IPS.split(',') : [];
+
 app.use((req, res, next) => {
-  const clientIp = req.headers['x-forwarded-for']?.split(',')[0] || req.socket.remoteAddress;
+  try {
+    let clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || '';
+    if (clientIp.startsWith("::ffff:")) clientIp = clientIp.replace("::ffff:", "");
 
-  if (!allowedIps.includes(clientIp)) {
-    console.log(`❌ Acceso no permitido desde IP: ${clientIp}`);
+    if (!allowedIps.includes(clientIp)) {
+      console.log(`❌ Acceso no permitido desde IP: ${clientIp}`);
 
-    if (req.headers.accept?.includes('application/json')) {
-      return res.status(403).json({
-        status: "error",
-        message: `Acceso denegado: Tu IP (${clientIp}) no tiene permiso para entrar.`
+      if (req.headers.accept?.includes('application/json')) {
+        return res.status(403).json({
+          status: "error",
+          message: `Acceso denegado: Tu IP (${clientIp}) no tiene permiso para entrar.`
+        });
+      }
+
+      return res.status(403).render('error', {
+        title: "Acceso Denegado",
+        mensaje: `Acceso denegado: Tu IP (${clientIp}) no tiene permiso para entrar.`,
+        error: null
       });
     }
 
+    next(); // IP permitida
+  } catch (err) {
+    console.error("Error al verificar IP:", err);
     return res.status(403).render('error', {
       title: "Acceso Denegado",
-      mensaje: `Acceso denegado: Tu IP (${clientIp}) no tiene permiso para entrar.`,
+      mensaje: "No se pudo verificar tu IP. Acceso denegado.",
       error: null
     });
   }
-
-  next();
 });
 
 // ⚙️ Middlewares base
