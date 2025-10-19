@@ -10,6 +10,7 @@ const cookieParser = require('cookie-parser');
 const expressLayouts = require('express-ejs-layouts');
 const isAuthenticated = require('./middleware/auth');
 const { query } = require('./db');
+const ipFilter = require('./middleware/ipFilter');
 
 const app = express();
 const PORT = process.env.PORT || 10000;
@@ -47,7 +48,6 @@ const allowedOrigins = [
   'http://localhost:5173',
   'https://pasteleria-1.onrender.com'
 ];
-
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   if (allowedOrigins.includes(origin)) {
@@ -85,32 +85,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// 🔹 Middleware IP whitelist amigable
-const allowedIps = process.env.ALLOWED_IPS?.split(',') || [];
-app.use((req, res, next) => {
-  let clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || '';
-  if (clientIp.startsWith("::ffff:")) clientIp = clientIp.replace("::ffff:", "");
-
-  if (allowedIps.length > 0 && !allowedIps.includes(clientIp)) {
-    console.log(`⚠️ Acceso denegado desde IP: ${clientIp}`);
-
-    if (req.headers.accept?.includes('application/json')) {
-      return res.status(403).json({
-        status: "error",
-        mensaje: "Acceso denegado: tu IP no tiene permiso."
-      });
-    }
-
-    return res.status(403).render('error', {
-      title: "Acceso Denegado",
-      mensaje: `Acceso denegado: tu IP (${clientIp}) no tiene permiso para entrar.`,
-      error: null
-    });
-  }
-
-  next();
-});
-
 // 🔹 Rutas de prueba
 app.get('/api/test-db', async (req, res) => {
   try {
@@ -135,19 +109,21 @@ const productosRoutes = require('./routes/productos');
 const categoriasRoutes = require('./routes/categorias');
 const imagenesRoutes = require('./routes/imagenes');
 
+const allowedIps = process.env.ALLOWED_IPS?.split(',') || [];
+
 // 🏠 Ruta raíz
 app.get('/', (req, res) => res.locals.isAuthenticated ? res.redirect('/home') : res.redirect('/catalogo'));
 
-// 🌍 Rutas públicas
+// 🌍 Rutas públicas (sin restricción de IP)
 app.use('/catalogo', catalogoRoutes);
 app.use('/login', loginRoutes);
 app.use('/register', registerRoutes);
 
-// 🔒 Rutas privadas
-app.use('/home', isAuthenticated, homeRoutes);
-app.use('/productos', isAuthenticated, productosRoutes);
-app.use('/categorias', isAuthenticated, categoriasRoutes);
-app.use('/imagenes', isAuthenticated, imagenesRoutes);
+// 🔒 Rutas privadas (IP + JWT)
+app.use('/home', isAuthenticated, ipFilter(allowedIps), homeRoutes);
+app.use('/productos', isAuthenticated, ipFilter(allowedIps), productosRoutes);
+app.use('/categorias', isAuthenticated, ipFilter(allowedIps), categoriasRoutes);
+app.use('/imagenes', isAuthenticated, ipFilter(allowedIps), imagenesRoutes);
 
 // 📘 Swagger
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, { explorer: true, swaggerOptions: { persistAuthorization: true }}));
