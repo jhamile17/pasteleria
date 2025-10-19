@@ -2,7 +2,15 @@
 <div class="container py-4">
   <h2 class="mb-4 text-center">Editar Producto</h2>
 
-  <form action="/productos/<%= producto.id %>" method="POST">
+  <!-- Mensajes -->
+  <% if (mensaje) { %>
+    <div class="alert alert-success"><%= mensaje %></div>
+  <% } %>
+  <% if (error) { %>
+    <div class="alert alert-danger"><%= error %></div>
+  <% } %>
+
+  <form action="/productos/<%= producto.id %>?_method=PUT" method="POST">
     <div class="mb-3">
       <label class="form-label">Nombre:</label>
       <input type="text" name="nombre" class="form-control" value="<%= producto.nombre %>" required>
@@ -17,7 +25,7 @@
       <label class="form-label">Categoría:</label>
       <select name="categoria_id" class="form-select" required>
         <% categorias.forEach(c => { %>
-          <option value="<%= c.id %>" <%= producto.categoria_id === c.id ? 'selected' : '' %>>
+          <option value="<%= c.id %>" <%= producto.categoria_id == c.id ? 'selected' : '' %>>
             <%= c.nombre %>
           </option>
         <% }) %>
