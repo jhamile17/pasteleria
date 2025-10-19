@@ -10,7 +10,7 @@ function isJson(req) {
   return req.is('application/json') || req.headers.accept?.includes('application/json');
 }
 
-// 📦 Configuración de Multer
+// 🧩 Multer configuración
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     const carpeta = 'public/imagenes/productos/';
@@ -23,101 +23,70 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-// 📂 Obtener todas las categorías
+// 🔹 Obtener todas las categorías
 async function obtenerCategorias() {
-  const { rows: categorias } = await db.query('SELECT * FROM categorias');
-  return categorias;
+  const { rows } = await db.query('SELECT * FROM categorias ORDER BY nombre ASC');
+  return rows;
 }
 
-// 🔁 Redirigir /imagenes → /imagenes/nuevoi
+// 🔹 Redirigir raíz
 router.get('/', (req, res) => {
   res.redirect('/imagenes/nuevoi');
 });
 
-// 🧾 Renderizar formulario de imágenes
+// 🧾 Formulario nuevo
 router.get('/nuevoi', async (req, res) => {
   try {
     const categorias = await obtenerCategorias();
-    res.render('imagenes/nuevoi', { 
-      categorias, 
-      mensaje: req.query.mensaje || null, 
-      error: req.query.error || null 
+    res.render('imagenes/nuevoi', {
+      categorias,
+      mensaje: req.query.mensaje || null,
+      error: req.query.error || null,
+      productos: [],       // Inicial vacío para filtro
+      categoriaId: null
     });
   } catch (err) {
     console.error(err);
-    if (isJson(req)) return res.status(500).json({ error: 'Error al cargar formulario de imágenes' });
     res.redirect('/imagenes?error=Error al cargar formulario de imágenes');
   }
 });
 
-// 🧭 Obtener productos por categoría
-router.get('/productos/byCategoria/:categoriaId', async (req, res) => {
+// 🧭 Filtrar productos por categoría (usado en el form)
+router.get('/productos', async (req, res) => {
   try {
-    const { categoriaId } = req.params;
-    const { rows: productos } = await db.query(
-      'SELECT id, nombre FROM productos WHERE categoria_id = $1',
-      [categoriaId]
-    );
-
-    if (productos.length === 0) {
-      if (isJson(req)) return res.status(404).json({ error: 'No hay productos para esta categoría' });
-      return res.redirect(`/imagenes/nuevoi?error=${encodeURIComponent('No hay productos para esta categoría')}`);
+    const { categoria } = req.query;
+    let productos = [];
+    if (categoria) {
+      const { rows } = await db.query('SELECT id, nombre FROM productos WHERE categoria_id = $1 ORDER BY nombre ASC', [categoria]);
+      productos = rows;
     }
-
-    if (isJson(req)) return res.json(productos);
-    res.render('imagenes/productos', { productos, mensaje: null, error: null });
+    const categorias = await obtenerCategorias();
+    res.render('imagenes/nuevoi', {
+      categorias,
+      productos,
+      categoriaId: categoria || null,
+      mensaje: null,
+      error: productos.length === 0 && categoria ? 'No hay productos para esta categoría' : null
+    });
   } catch (err) {
     console.error(err);
-    if (isJson(req)) return res.status(500).json({ error: 'Error interno del servidor' });
-    res.redirect('/imagenes?error=Error interno del servidor');
+    res.redirect('/imagenes?error=Error al filtrar productos');
   }
 });
 
-// 📤 Guardar nueva imagen
+// 📤 Guardar imagen
 router.post('/', upload.single('imagen'), async (req, res) => {
   try {
     const { producto_id } = req.body;
-
-    if (!req.file) {
-      const errorMsg = 'Debe subir una imagen válida';
-      if (isJson(req)) return res.status(400).json({ error: errorMsg });
-      return res.redirect(`/imagenes/nuevoi?error=${encodeURIComponent(errorMsg)}`);
-    }
+    if (!req.file) return res.redirect(`/imagenes/nuevoi?error=Debe subir una imagen`);
 
     const url = '/imagenes/productos/' + req.file.filename;
     await db.query('INSERT INTO imagenes_productos (url, producto_id) VALUES ($1, $2)', [url, producto_id]);
 
-    const mensaje = 'Imagen agregada correctamente';
-    if (isJson(req)) return res.status(201).json({ mensaje, url });
-    res.redirect(`/imagenes/nuevoi?mensaje=${encodeURIComponent(mensaje)}`);
+    res.redirect(`/imagenes/nuevoi?mensaje=Imagen agregada correctamente`);
   } catch (err) {
     console.error(err);
-    if (isJson(req)) return res.status(500).json({ error: 'Error interno del servidor' });
     res.redirect('/imagenes/nuevoi?error=Error al agregar imagen');
-  }
-});
-
-// 📜 Listar imágenes por producto
-router.get('/list/:producto_id', async (req, res) => {
-  try {
-    const { producto_id } = req.params;
-    const { rows: imagenes } = await db.query(
-      'SELECT * FROM imagenes_productos WHERE producto_id = $1',
-      [producto_id]
-    );
-
-    if (imagenes.length === 0) {
-      const errorMsg = 'No hay imágenes para este producto';
-      if (isJson(req)) return res.status(404).json({ error: errorMsg });
-      return res.redirect(`/imagenes/nuevoi?error=${encodeURIComponent(errorMsg)}`);
-    }
-
-    if (isJson(req)) return res.json(imagenes);
-    res.render('imagenes/list', { imagenes, mensaje: null, error: null });
-  } catch (err) {
-    console.error(err);
-    if (isJson(req)) return res.status(500).json({ error: 'Error interno del servidor' });
-    res.redirect('/imagenes/nuevoi?error=Error al listar imágenes');
   }
 });
 
@@ -125,32 +94,21 @@ router.get('/list/:producto_id', async (req, res) => {
 router.put('/:id', upload.single('imagen'), async (req, res) => {
   try {
     const { id } = req.params;
-
-    if (!req.file) {
-      const errorMsg = 'Debe subir una nueva imagen';
-      if (isJson(req)) return res.status(400).json({ error: errorMsg });
-      return res.redirect(`/imagenes/nuevoi?error=${encodeURIComponent(errorMsg)}`);
-    }
+    if (!req.file) return res.redirect(`/imagenes/nuevoi?error=Debe subir una nueva imagen`);
 
     const { rows } = await db.query('SELECT url FROM imagenes_productos WHERE id = $1', [id]);
-    if (rows.length === 0) {
-      const errorMsg = 'Imagen no encontrada';
-      if (isJson(req)) return res.status(404).json({ error: errorMsg });
-      return res.redirect(`/imagenes/nuevoi?error=${encodeURIComponent(errorMsg)}`);
-    }
+    if (!rows.length) return res.redirect(`/imagenes/nuevoi?error=Imagen no encontrada`);
 
+    // Borrar archivo anterior
     const rutaAnterior = 'public' + rows[0].url;
     if (fs.existsSync(rutaAnterior)) fs.unlinkSync(rutaAnterior);
 
     const url = '/imagenes/productos/' + req.file.filename;
-    await db.query('UPDATE imagenes_productos SET url = $1 WHERE id = $2', [url, id]);
+    await db.query('UPDATE imagenes_productos SET url=$1 WHERE id=$2', [url, id]);
 
-    const mensaje = 'Imagen actualizada correctamente';
-    if (isJson(req)) return res.status(200).json({ mensaje, url });
-    res.redirect(`/imagenes/nuevoi?mensaje=${encodeURIComponent(mensaje)}`);
+    res.redirect(`/imagenes/nuevoi?mensaje=Imagen actualizada correctamente`);
   } catch (err) {
     console.error(err);
-    if (isJson(req)) return res.status(500).json({ error: 'Error interno del servidor' });
     res.redirect('/imagenes/nuevoi?error=Error al actualizar imagen');
   }
 });
@@ -160,24 +118,15 @@ router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { rows } = await db.query('SELECT url FROM imagenes_productos WHERE id = $1', [id]);
-
-    if (rows.length === 0) {
-      const errorMsg = 'Imagen no encontrada';
-      if (isJson(req)) return res.status(404).json({ error: errorMsg });
-      return res.redirect(`/imagenes/nuevoi?error=${encodeURIComponent(errorMsg)}`);
-    }
+    if (!rows.length) return res.redirect(`/imagenes/nuevoi?error=Imagen no encontrada`);
 
     const rutaArchivo = 'public' + rows[0].url;
     if (fs.existsSync(rutaArchivo)) fs.unlinkSync(rutaArchivo);
 
-    await db.query('DELETE FROM imagenes_productos WHERE id = $1', [id]);
-
-    const mensaje = 'Imagen eliminada correctamente';
-    if (isJson(req)) return res.status(200).json({ mensaje });
-    res.redirect(`/imagenes/nuevoi?mensaje=${encodeURIComponent(mensaje)}`);
+    await db.query('DELETE FROM imagenes_productos WHERE id=$1', [id]);
+    res.redirect(`/imagenes/nuevoi?mensaje=Imagen eliminada correctamente`);
   } catch (err) {
     console.error(err);
-    if (isJson(req)) return res.status(500).json({ error: 'Error interno del servidor' });
     res.redirect('/imagenes/nuevoi?error=Error al eliminar imagen');
   }
 });
