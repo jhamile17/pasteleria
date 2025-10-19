@@ -7,7 +7,7 @@ function isJson(req) {
   return req.is('application/json') || req.headers.accept?.includes('application/json');
 }
 
-// ✅ LISTAR PRODUCTOS
+// 📄 LISTAR PRODUCTOS
 router.get('/', async (req, res) => {
   try {
     const { rows: productos } = await db.query(`
@@ -19,18 +19,36 @@ router.get('/', async (req, res) => {
     `);
 
     if (isJson(req)) {
-      return res.status(200).json({
-        mensaje: 'Lista de productos obtenida correctamente',
-        productos,
-      });
+      return res.status(200).json({ mensaje: 'Lista de productos obtenida correctamente', productos });
     }
 
-    // Renderiza vista EJS
-    res.render('productos/indexp', { productos, categorias: [], categoriaId: null, mensaje: req.query.mensaje || null, error: req.query.error || null });
+    res.render('productos/indexp', { 
+      productos, 
+      categorias: [], 
+      categoriaId: null, 
+      mensaje: req.query.mensaje || null, 
+      error: req.query.error || null 
+    });
   } catch (err) {
     console.error('❌ Error al listar productos:', err.message);
     if (isJson(req)) return res.status(500).json({ error: 'Error interno del servidor' });
     res.redirect('/productos?error=Error cargando productos');
+  }
+});
+
+// 📄 FORMULARIO NUEVO PRODUCTO
+router.get('/nuevop', async (req, res) => {
+  try {
+    const { rows: categorias } = await db.query('SELECT * FROM categorias ORDER BY nombre ASC');
+    res.render('productos/nuevop', { 
+      categorias, 
+      producto: null, 
+      mensaje: req.query.mensaje || null, 
+      error: req.query.error || null 
+    });
+  } catch (err) {
+    console.error('❌ Error al cargar formulario de nuevo producto:', err.message);
+    res.redirect('/productos?error=Error al cargar formulario');
   }
 });
 
@@ -42,20 +60,17 @@ router.post('/', async (req, res) => {
     if (!nombre || !precio || !categoria_id) {
       const errorMsg = 'Todos los campos son obligatorios';
       if (isJson(req)) return res.status(400).json({ error: errorMsg });
-      return res.redirect(`/productos?error=${encodeURIComponent(errorMsg)}`);
+      return res.redirect(`/productos/nuevop?error=${encodeURIComponent(errorMsg)}`);
     }
 
-    const { rowCount: categoriaExists } = await db.query('SELECT id FROM categorias WHERE id = $1', [categoria_id]);
-    if (categoriaExists === 0) {
+    const { rowCount } = await db.query('SELECT id FROM categorias WHERE id = $1', [categoria_id]);
+    if (rowCount === 0) {
       const errorMsg = 'La categoría seleccionada no existe';
       if (isJson(req)) return res.status(400).json({ error: errorMsg });
-      return res.redirect(`/productos?error=${encodeURIComponent(errorMsg)}`);
+      return res.redirect(`/productos/nuevop?error=${encodeURIComponent(errorMsg)}`);
     }
 
-    await db.query(
-      'INSERT INTO productos (nombre, precio, categoria_id) VALUES ($1, $2, $3)',
-      [nombre.trim(), precio, categoria_id]
-    );
+    await db.query('INSERT INTO productos (nombre, precio, categoria_id) VALUES ($1, $2, $3)', [nombre.trim(), precio, categoria_id]);
 
     const mensaje = 'Producto creado correctamente';
     if (isJson(req)) return res.status(201).json({ mensaje });
@@ -63,7 +78,31 @@ router.post('/', async (req, res) => {
   } catch (err) {
     console.error('❌ Error al crear producto:', err.message);
     if (isJson(req)) return res.status(500).json({ error: 'Error interno del servidor' });
-    res.redirect('/productos?error=Error al crear producto');
+    res.redirect('/productos/nuevop?error=Error al crear producto');
+  }
+});
+
+// 📄 FORMULARIO EDITAR PRODUCTO
+router.get('/editarp/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const { rows: productoRows } = await db.query('SELECT * FROM productos WHERE id = $1', [id]);
+    if (productoRows.length === 0) {
+      return res.redirect(`/productos?error=${encodeURIComponent('Producto no encontrado')}`);
+    }
+
+    const { rows: categorias } = await db.query('SELECT * FROM categorias ORDER BY nombre ASC');
+
+    res.render('productos/editarp', { 
+      producto: productoRows[0], 
+      categorias, 
+      mensaje: req.query.mensaje || null, 
+      error: req.query.error || null 
+    });
+  } catch (err) {
+    console.error('❌ Error al cargar formulario de edición:', err.message);
+    res.redirect('/productos?error=Error al cargar formulario');
   }
 });
 
@@ -107,10 +146,7 @@ router.put('/:id', async (req, res) => {
       return res.redirect(`/productos?error=${encodeURIComponent(errorMsg)}`);
     }
 
-    await db.query(
-      'UPDATE productos SET nombre = $1, precio = $2, categoria_id = $3 WHERE id = $4',
-      [nombre.trim(), precio, categoria_id, id]
-    );
+    await db.query('UPDATE productos SET nombre = $1, precio = $2, categoria_id = $3 WHERE id = $4', [nombre.trim(), precio, categoria_id, id]);
 
     const mensaje = 'Producto actualizado correctamente';
     if (isJson(req)) return res.status(200).json({ mensaje });
@@ -118,7 +154,7 @@ router.put('/:id', async (req, res) => {
   } catch (err) {
     console.error('❌ Error al actualizar producto:', err.message);
     if (isJson(req)) return res.status(500).json({ error: 'Error interno del servidor' });
-    res.redirect('/productos?error=Error al actualizar producto');
+    res.redirect(`/productos/editarp/${req.params.id}?error=Error al actualizar producto`);
   }
 });
 
