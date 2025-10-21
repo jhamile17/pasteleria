@@ -1,9 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
-const db = require('../db'); // db.js con Pool de pg y SSL
+const pool = require('../db');
 
-// GET /register
 router.get('/', (req, res) => {
   res.render('register', { 
     title: 'Registro - Cake Sweet',
@@ -11,68 +10,54 @@ router.get('/', (req, res) => {
   });
 });
 
-// POST /register
 router.post('/', async (req, res) => {
   try {
-    const isJson = req.is('application/json'); // Detecta si viene de Postman/API
+    const isJson = req.is('application/json');
     const { usuario, password } = req.body;
 
     console.log('🧠 Body recibido:', req.body);
 
-    // Validaciones básicas
     if (!usuario || !password) {
-      const msg = 'Usuario y contraseña son necesarios';
-      if (isJson) return res.status(400).json({ error: msg });
-      return res.render('register', { error: msg });
+      if (isJson) return res.status(400).json({ error: 'Usuario y contraseña son necesarios' });
+      return res.render('register', { error: 'Usuario y contraseña son necesarios' });
     }
 
     if (usuario.length < 3) {
-      const msg = 'El usuario debe tener al menos 3 caracteres';
-      if (isJson) return res.status(400).json({ error: msg });
-      return res.render('register', { error: msg });
+      if (isJson) return res.status(400).json({ error: 'El usuario debe tener al menos 3 caracteres' });
+      return res.render('register', { error: 'El usuario debe tener al menos 3 caracteres' });
     }
 
     if (password.length < 4) {
-      const msg = 'La contraseña debe tener al menos 4 caracteres';
-      if (isJson) return res.status(400).json({ error: msg });
-      return res.render('register', { error: msg });
+      if (isJson) return res.status(400).json({ error: 'La contraseña debe tener al menos 4 caracteres' });
+      return res.render('register', { error: 'La contraseña debe tener al menos 4 caracteres' });
     }
 
-    // Verificar si el usuario ya existe
-    const existingUsers = await db.query(
-      'SELECT id FROM usuarios WHERE usuario = $1',
+    // Verificar si ya existe
+    const { rows: existingUsers } = await pool.query(
+      'SELECT * FROM usuarios WHERE usuario = $1',
       [usuario]
     );
 
-    if (existingUsers.rows.length > 0) {
-      const msg = 'El usuario ya existe';
-      if (isJson) return res.status(400).json({ error: msg });
-      return res.render('register', { error: msg });
+    if (existingUsers.length > 0) {
+      if (isJson) return res.status(400).json({ error: 'El usuario ya existe' });
+      return res.render('register', { error: 'El usuario ya existe' });
     }
 
-    // Encriptar la contraseña
+    // Encriptar y guardar
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Insertar usuario en la base de datos
-    await db.query(
+    await pool.query(
       'INSERT INTO usuarios (usuario, password) VALUES ($1, $2)',
       [usuario, hashedPassword]
     );
 
-    console.log('✅ Usuario registrado:', usuario);
-
-    if (isJson) return res.status(201).json({ mensaje: 'Usuario registrado correctamente' });
-
-    res.redirect('/login?mensaje=Usuario registrado exitosamente');
-
-  } catch (error) {
-    console.error('❌ Error en registro:', error);
-
-    // Detectar si la conexión requiere SSL
-    if (error.code === 'ECONNREFUSED') {
-      console.error('❌ Verifica que db.js tenga ssl: { rejectUnauthorized: false } para Render');
+    if (isJson) {
+      return res.status(201).json({ mensaje: 'Usuario registrado correctamente' });
     }
 
+    res.redirect('/login?mensaje=Usuario registrado exitosamente');
+  } catch (error) {
+    console.error('❌ Error en registro:', error);
     const isJson = req.is('application/json');
     if (isJson) return res.status(500).json({ error: 'Error interno del servidor' });
     res.render('register', { error: 'Error interno del servidor' });
